@@ -1,0 +1,23 @@
+# Environnement
+venv/
+
+# Python
+__pycache__/
+*.pyc
+
+# Credentials — JAMAIS sur GitHub
+.env
+token_strava.json
+token_withings.json
+token_google.json
+
+# Données brutes
+data/raw/
+data/clean/
+data/warehouse/
+
+# Système
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints/
