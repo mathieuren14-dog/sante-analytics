@@ -5,6 +5,7 @@ from pathlib import Path
 # Chemin vers la base de données
 DB_PATH = Path("data/warehouse/sante.duckdb")
 
+
 def connecter():
     """
     Connexion à la base de données DuckDB persistante.
@@ -33,6 +34,25 @@ def charger_strava(conn):
     print(f"✓ strava_activites chargée — {count} activités")
 
 
+def charger_withings(conn):
+    """
+    Charge le Parquet Withings dans DuckDB.
+    """
+    chemin = Path("data/clean/withings_mesures.parquet")
+
+    if not chemin.exists():
+        print("⚠️ Fichier Withings non trouvé — lance d'abord le transformer")
+        return
+
+    conn.execute("""
+        CREATE OR REPLACE TABLE withings_mesures AS
+        SELECT * FROM read_parquet(?)
+    """, [str(chemin)])
+
+    count = conn.execute("SELECT COUNT(*) FROM withings_mesures").fetchone()[0]
+    print(f"✓ withings_mesures chargée — {count} mesures")
+
+
 def verifier_warehouse(conn):
     """
     Affiche toutes les tables disponibles dans le warehouse.
@@ -42,23 +62,24 @@ def verifier_warehouse(conn):
     print(tables)
 
 
-def apercu_strava(conn):
+def apercu_withings(conn):
     """
-    Aperçu rapide des données Strava dans DuckDB.
+    Aperçu rapide des données Withings dans DuckDB.
     """
     df = conn.execute("""
         SELECT
-            categorie,
-            COUNT(*) as nb_activites,
-            ROUND(SUM(distance_km), 1) as distance_totale_km,
-            ROUND(AVG(distance_km), 2) as distance_moyenne_km,
-            ROUND(SUM(moving_time_h), 1) as heures_totales
-        FROM strava_activites
-        GROUP BY categorie
-        ORDER BY nb_activites DESC
+            date,
+            poids_kg,
+            masse_grasse_pct,
+            masse_musculaire_kg,
+            imc
+        FROM withings_mesures
+        WHERE poids_kg IS NOT NULL
+        ORDER BY date DESC
+        LIMIT 5
     """).df()
 
-    print(f"\nRésumé par catégorie :")
+    print(f"\nDernières mesures Withings :")
     print(df)
 
 
@@ -70,8 +91,11 @@ if __name__ == "__main__":
     print("\nChargement des données Strava...")
     charger_strava(conn)
 
+    print("\nChargement des données Withings...")
+    charger_withings(conn)
+
     verifier_warehouse(conn)
-    apercu_strava(conn)
+    apercu_withings(conn)
 
     conn.close()
     print("\n✓ Warehouse mis à jour")
