@@ -1,10 +1,8 @@
 import os
 import requests
 from dotenv import load_dotenv
-import pandas as pd
 import json
 from pathlib import Path
-from datetime import datetime, timedelta
 import time
 
 load_dotenv()
@@ -17,6 +15,8 @@ REFRESH_TOKEN = os.getenv("WITHINGS_REFRESH_TOKEN")
 def get_access_token():
     """
     Utilise le refresh token pour obtenir un access token frais.
+    Withings invalide le refresh token à chaque utilisation et en retourne un nouveau.
+    On sauvegarde automatiquement le nouveau refresh token dans .env.
     """
     response = requests.post(
         url="https://wbsapi.withings.net/v2/oauth2",
@@ -34,19 +34,59 @@ def get_access_token():
     if data["status"] != 0:
         raise Exception(f"Erreur Withings : {data['error']}")
 
+    # Withings retourne un nouveau refresh token à chaque appel
+    # On le sauvegarde immédiatement dans .env
+    nouveau_refresh_token = data["body"]["refresh_token"]
+    mettre_a_jour_env("WITHINGS_REFRESH_TOKEN", nouveau_refresh_token)
+
     return data["body"]["access_token"]
+
+
+def mettre_a_jour_env(cle, valeur):
+    """
+    Met à jour une valeur dans le fichier .env automatiquement.
+    """
+    env_path = Path(".env")
+    contenu = env_path.read_text()
+
+    lignes = contenu.split("\n")
+    nouvelles_lignes = []
+
+    for ligne in lignes:
+        if ligne.startswith(f"{cle}="):
+            nouvelles_lignes.append(f"{cle}={valeur}")
+        else:
+            nouvelles_lignes.append(ligne)
+
+    env_path.write_text("\n".join(nouvelles_lignes))
+    print(f"✓ Nouveau refresh token sauvegardé dans .env")
 
 
 def get_mesures_corporelles(access_token):
     """
-    Récupère les mesures corporelles — poids, masse grasse, IMC, etc.
+    Récupère toutes les mesures corporelles depuis le début.
+    Types inclus :
+    1   = Poids (kg)
+    4   = Taille (m)
+    5   = Masse sans graisse (kg)
+    6   = Masse grasse (%)
+    8   = Masse grasse (kg)
+    76  = Masse musculaire (kg)
+    77  = Hydratation (kg)
+    88  = Masse osseuse (kg)
+    123 = VO2 max
+    170 = Graisse viscérale
+    226 = Métabolisme de base (kcal)
+    227 = Âge métabolique
     """
     response = requests.post(
         url="https://wbsapi.withings.net/measure",
         data={
             "action": "getmeas",
-            "meastypes": "1,5,6,8,76,77,88",  # voir tableau ci-dessous
-            "category": 1,  # 1 = mesures réelles (pas objectifs)
+            "meastypes": "1,4,5,6,8,76,77,88,123,170,226,227",
+            "category": 1,
+            "startdate": 0,
+            "enddate": int(time.time())
         },
         headers={"Authorization": f"Bearer {access_token}"}
     )
@@ -59,53 +99,9 @@ def get_mesures_corporelles(access_token):
     return data["body"]["measuregrps"]
 
 
-def parser_mesures(mesures_raw):
-    """
-    Convertit le format Withings (complexe) en DataFrame propre.
-
-    Types de mesures Withings :
-    1  = Poids (kg)
-    5  = Masse grasse (%)
-    6  = Masse grasse (kg)
-    8  = Masse musculaire (kg)
-    76 = Masse musculaire (%)
-    77 = Masse hydrique (%)
-    88 = Masse osseuse (kg)
-    """
-    type_map = {
-        1: "poids_kg",
-        5: "masse_grasse_pct",
-        6: "masse_grasse_kg",
-        8: "masse_musculaire_kg",
-        76: "masse_musculaire_pct",
-        77: "masse_hydrique_pct",
-        88: "masse_osseuse_kg"
-    }
-
-    lignes = []
-
-    for groupe in mesures_raw:
-        date = datetime.fromtimestamp(groupe["date"])
-        ligne = {"date": date.date(), "datetime": date}
-
-        for mesure in groupe["measures"]:
-            type_id = mesure["type"]
-            if type_id in type_map:
-                # Withings encode les valeurs avec un multiplicateur
-                valeur = mesure["value"] * (10 ** mesure["unit"])
-                ligne[type_map[type_id]] = round(valeur, 2)
-
-        lignes.append(ligne)
-
-    df = pd.DataFrame(lignes)
-    df = df.sort_values("datetime", ascending=False).reset_index(drop=True)
-
-    return df
-
-
 def sauvegarder_raw(mesures_raw):
     """
-    Sauvegarde les données brutes JSON.
+    Sauvegarde les données brutes JSON — on ne modifie jamais les données brutes.
     """
     chemin = Path("data/raw/withings/mesures.json")
     chemin.parent.mkdir(parents=True, exist_ok=True)
@@ -126,12 +122,3 @@ if __name__ == "__main__":
     print(f"✓ {len(mesures_raw)} mesures récupérées")
 
     sauvegarder_raw(mesures_raw)
-
-    print("\nParsing des mesures...")
-    df = parser_mesures(mesures_raw)
-
-    print(f"\nAperçu :")
-    print(df.head(10))
-
-    print(f"\nColonnes disponibles : {df.columns.tolist()}")
-    print(f"Dimensions : {df.shape}")
