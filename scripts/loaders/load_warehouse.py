@@ -46,6 +46,9 @@ if __name__ == "__main__":
     charger_table(conn, "withings_mesures",  "data/clean/withings_mesures.parquet")
     charger_table(conn, "bien_etre",         "data/clean/bien_etre.parquet")
     charger_table(conn, "supplements",       "data/clean/supplements.parquet")
+    charger_table(conn, "fatsecret_entrees",      "data/clean/fatsecret_entrees.parquet")
+    charger_table(conn, "fatsecret_macros_repas", "data/clean/fatsecret_macros_repas.parquet")
+    charger_table(conn, "fatsecret_macros_jour",  "data/clean/fatsecret_macros_jour.parquet")
 
     verifier_warehouse(conn)
 
