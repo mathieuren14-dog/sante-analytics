@@ -51,6 +51,7 @@ if __name__ == "__main__":
     charger_table(conn, "fatsecret_macros_jour",  "data/clean/fatsecret_macros_jour.parquet")
     charger_table(conn, "nova_correspondance", "data/clean/nova_correspondance.parquet")
     charger_table(conn, "nova_par_jour",       "data/clean/nova_par_jour.parquet")
+    charger_table(conn, "garmin_sante", "data/clean/garmin_sante.parquet")
     verifier_warehouse(conn)
 
     conn.close()
